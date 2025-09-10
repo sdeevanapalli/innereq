@@ -713,24 +713,37 @@ def main():
     if mode == "Report/Template Generation":
         st.subheader("Report/Template Query")
 
-        if "user_query" not in st.session_state:
-            st.session_state.user_query = ""
+        # Inputs for report generation (same as counselling)
+        if "report_question" not in st.session_state:
+            st.session_state.report_question = ""
+        if "personality_score" not in st.session_state:
+            st.session_state.personality_score = 0
+        if "vedic_personality_score" not in st.session_state:
+            st.session_state.vedic_personality_score = 0
 
-        try:
-            user_query = st.text_area(
-                "Enter a query, or select a Quick Prompt above",
-                value=st.session_state.get("user_query", ""),
-                height=80
-            )
-            if user_query != st.session_state.get("user_query", ""):
-                st.session_state.user_query = user_query
-        except Exception:
-            user_query = ""
+        report_question = st.text_input(
+            "Ask your Question for Counselling",
+            value=st.session_state.get("report_question", "")
+        )
+        if report_question != st.session_state.get("report_question", ""):
+            st.session_state.report_question = report_question
+
+        personality_score = st.number_input(
+            "Your Personality Score",
+            min_value=0, max_value=100, value=st.session_state.get("personality_score", 0), step=1
+        )
+        st.session_state.personality_score = personality_score
+
+        vedic_personality_score = st.number_input(
+            "Vedic Personality Score",
+            min_value=0, max_value=100, value=st.session_state.get("vedic_personality_score", 0), step=1
+        )
+        st.session_state.vedic_personality_score = vedic_personality_score
 
         submit_custom_query = st.button("Submit")
 
         # Handle query submission
-        used_query = user_query
+        used_query = report_question
         if st.session_state.get("quick_prompt"):
             used_query = st.session_state.quick_prompt
 
@@ -746,13 +759,14 @@ def main():
 
                 with st.spinner("Fetching relevant context and generating report..."):
                     try:
+                        extra_info = f"\nPersonality Score: {personality_score}\nVedic Personality Score: {vedic_personality_score}"
                         context_block = assemble_context(
                             reference_docs,
-                            used_query,
+                            used_query + extra_info,
                             config["CONTEXT_CHUNKS"],
                             config["CHUNK_CHAR_LIMIT"]
                         )
-                        output = run_model(context_block, proposal_text, used_query, selected_model, config)
+                        output = run_model(context_block, proposal_text, used_query + extra_info, selected_model, config)
                         summary = make_summary(output, selected_model, config)
                     except Exception as e:
                         st.error(f"Report generation error: {str(e)}")
@@ -815,10 +829,9 @@ def main():
         if st.session_state.get("qa_quick_prompt"):
             counselling_question = st.session_state.qa_quick_prompt
         else:
-            counselling_question = st.text_area(
+            counselling_question = st.text_input(
                 "Ask your Question for Counselling",
-                value=st.session_state.get("counselling_question", ""),
-                height=80
+                value=st.session_state.get("counselling_question", "")
             )
             if counselling_question != st.session_state.get("counselling_question", ""):
                 st.session_state.counselling_question = counselling_question
