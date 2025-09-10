@@ -8,8 +8,6 @@ import numpy as np
 from typing import Any, Dict, List, Optional, Tuple
 
 from openai import OpenAI
-from docx import Document
-from pdfminer.high_level import extract_text as extract_pdf_text
 from dotenv import load_dotenv
 import tiktoken
 
@@ -19,7 +17,6 @@ from googleapiclient.http import MediaIoBaseDownload
 import time
 
 
-# ENV CONFIG AND SETUP
 # ENV CONFIG AND SETUP
 @st.cache_data
 def load_environment() -> Tuple[Optional[Dict[str, str]], Optional[str]]:
@@ -75,30 +72,27 @@ MODEL_MAP = {
 PRESET_QUERIES = {
     "Ask Bhagvad Gita": "According to Gita, use advise of Krishna to Arjun for similar cases and advise me accordingly. Please mention relevant shaloka and give short and crisp answer.",
     "Personalized Therapy Recommendation": "According to Psychotherapy guide book, please advise the correct therapy.",
-    "Ancient Self": " According to CharakSamhita, please advise the correct therapy.",
+    "Ancient Self": "According to CharakSamhita, please advise the correct therapy.",
 }
 
 MODEL_CONFIGS = {
     "chatgpt-4o-latest": {
-        "CONTEXT_CHUNKS": 8,  # Fits under 30k TPM
-        "CHUNK_CHAR_LIMIT": 2000,  # Smaller per chunk
-        "PROPOSAL_CHAR_LIMIT": 30000,
-        "TOKEN_BUDGET": 128000,  # Model max, but our call stays < 30k
-        "MAX_RESPONSE_TOKENS": 4000,  # Leaves room for input within TPM
+        "CONTEXT_CHUNKS": 8,
+        "CHUNK_CHAR_LIMIT": 2000,
+        "TOKEN_BUDGET": 128000,
+        "MAX_RESPONSE_TOKENS": 4000,
         "SUMMARY_MAX_TOKENS": 1000,
     },
     "gpt-5": {
         "CONTEXT_CHUNKS": 8,
         "CHUNK_CHAR_LIMIT": 2000,
-        "PROPOSAL_CHAR_LIMIT": 30000,
         "TOKEN_BUDGET": 400000,
-        "MAX_RESPONSE_TOKENS": 4000,  # Keep total < 30k TPM
+        "MAX_RESPONSE_TOKENS": 4000,
         "SUMMARY_MAX_TOKENS": 1000,
     },
     "gpt-4.1": {
         "CONTEXT_CHUNKS": 8,
         "CHUNK_CHAR_LIMIT": 2000,
-        "PROPOSAL_CHAR_LIMIT": 30000,
         "TOKEN_BUDGET": 1000000,
         "MAX_RESPONSE_TOKENS": 4000,
         "SUMMARY_MAX_TOKENS": 1000,
@@ -107,9 +101,7 @@ MODEL_CONFIGS = {
 
 
 def error_handler(msg: str) -> None:
-    st.error(
-        "An internal error occurred while processing your request. Please try again later."
-    )
+    st.error("An internal error occurred while processing your request. Please try again later.")
 
 
 # Initialize OpenAI client
@@ -135,17 +127,13 @@ def count_tokens(text: str, model: str = "gpt-4.1") -> int:
         try:
             enc = tiktoken.get_encoding("cl100k_base")
         except Exception as e:
-            st.warning(
-                "An internal error occurred while processing your request. Please try again later."
-            )
+            st.warning("An internal error occurred while processing your request. Please try again later.")
             return len(text) // 4
 
     try:
         return len(enc.encode(text))
     except Exception as e:
-        st.warning(
-            "An internal error occurred while processing your request. Please try again later."
-        )
+        st.warning("An internal error occurred while processing your request. Please try again later.")
         return len(text) // 4
 
 
@@ -156,9 +144,7 @@ def get_drive_service() -> Any:
         parsed_json = json.loads(SERVICE_ACCOUNT_JSON)
         parsed_json["private_key"] = parsed_json["private_key"].replace("\\n", "\n")
 
-        temp_service_file = tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".json", delete=False
-        )
+        temp_service_file = tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=False)
         json.dump(parsed_json, temp_service_file)
         temp_service_file.close()
 
@@ -260,9 +246,7 @@ def download_txt_as_text(file_id):
             except Exception as e:
                 retries += 1
                 if retries < max_retries:
-                    st.warning(
-                        f"Download chunk error: {str(e)}. Retrying {retries}/{max_retries}..."
-                    )
+                    st.warning(f"Download chunk error: {str(e)}. Retrying {retries}/{max_retries}...")
                 else:
                     st.error(f"Download failed after {max_retries} retries: {str(e)}")
                     break
@@ -278,75 +262,6 @@ def download_txt_as_text(file_id):
         return ""
 
 
-def parse_uploaded_file(uploaded_file):
-    """Parse uploaded file content"""
-    try:
-        fname = uploaded_file.name.lower()
-
-        if fname.endswith(".txt"):
-            try:
-                bytes_content = uploaded_file.read()
-                if isinstance(bytes_content, bytes):
-                    return bytes_content.decode("utf-8", errors="ignore")
-                else:
-                    return str(bytes_content)
-            except Exception as e:
-                st.error(
-                    f"Failed to decode TXT file: {str(e)}. Please use UTF-8 encoding."
-                )
-                return ""
-
-        elif fname.endswith(".docx"):
-            try:
-                doc = Document(io.BytesIO(uploaded_file.read()))
-                return "\n".join([para.text for para in doc.paragraphs])
-            except Exception as e:
-                st.error(
-                    f"Failed to parse DOCX: {str(e)}. File may be corrupt or wrong format."
-                )
-                return ""
-
-        elif fname.endswith(".pdf"):
-            try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                    tmp.write(uploaded_file.read())
-                    tmp.close()
-                    text = extract_pdf_text(tmp.name)
-                    os.remove(tmp.name)
-                    return text
-            except Exception as e:
-                st.error(
-                    f"Failed to parse PDF: {str(e)}. The file may be encrypted or corrupt."
-                )
-                return ""
-        else:
-            st.warning("Unsupported file format. Only .txt, .docx, .pdf allowed.")
-            return ""
-    except Exception as e:
-        st.error(f"Could not parse uploaded file: {str(e)}")
-        return ""
-
-
-def chunk_documents(reference_docs: List[str], chunk_size: int) -> List[Dict[str, Any]]:
-    """Split documents into chunks"""
-    try:
-        chunks = []
-        for doc_index, doc in enumerate(reference_docs):
-            doc = (doc or "").strip()
-            if not doc:
-                continue
-            for i in range(0, len(doc), chunk_size):
-                chunk = doc[i : i + chunk_size]
-                if chunk.strip():
-                    chunks.append(
-                        {"text": chunk, "doc_index": doc_index, "chunk_start": i}
-                    )
-        return chunks
-    except Exception as e:
-        error_handler("")
-        return []
-
-
 def safe_openai_call(fn: Any, *args, retries: int = 3, **kwargs) -> Any:
     """Safe OpenAI call with retries"""
     for attempt in range(retries):
@@ -358,6 +273,19 @@ def safe_openai_call(fn: Any, *args, retries: int = 3, **kwargs) -> Any:
             else:
                 error_handler("")
                 return None
+
+
+def chunk_documents(documents: List[str], chunk_size: int) -> List[Dict[str, Any]]:
+    """Chunk documents into smaller pieces"""
+    chunks = []
+    for doc_idx, doc in enumerate(documents):
+        for i in range(0, len(doc), chunk_size):
+            chunks.append({
+                "text": doc[i:i + chunk_size],
+                "doc_idx": doc_idx,
+                "chunk_idx": len(chunks)
+            })
+    return chunks
 
 
 def get_embeddings_for_chunks(chunks: List[Dict[str, Any]]) -> List[np.ndarray]:
@@ -456,9 +384,7 @@ def assemble_context(
 ) -> str:
     """Assemble context from relevant chunks"""
     try:
-        relevant_chunks = retrieve_relevant_chunks(
-            reference_docs, user_query, k, chunk_size
-        )
+        relevant_chunks = retrieve_relevant_chunks(reference_docs, user_query, k, chunk_size)
 
         if not relevant_chunks:
             st.warning("No relevant reference documents found for this query.")
@@ -472,66 +398,49 @@ def assemble_context(
 
 def run_model(
     context_block: str,
-    proposal_block: Optional[str],
     user_query: str,
     model_name: str,
     config: Dict[str, Any],
+    is_detailed: bool = True
 ) -> str:
     """Run the model with context and query"""
-    use_proposal = proposal_block and (
-        "proposal" in user_query.lower() or "uploaded document" in user_query.lower()
-    )
+    
+    # Different prompts for detailed vs brief answers
+    if is_detailed:
+        system_prompt = """You are an expert spiritual counselor combining Bhagavad Gita teachings with modern psychometrics. Using only the content provided (uploaded files and references), generate a clear, structured, and comprehensive counseling response.
 
-    prompt = (
-        f"""
-You are an expert internal auditor and financial policy assistant. Using only the content provided (uploaded files, templates, and references), generate a clear, structured, and accurate report. Do not use external knowledge.
+1. Tone & Purpose: Keep your tone warm, empathetic, and spiritually grounding.
+2. Structure: Use clear sections with bold titles for comprehensive guidance.
+3. Citations: When referencing texts, mention exact verse numbers and sources.
+4. Formatting: Use bullet points and clear paragraphs for readability.
+5. Restrictions: Do not use external knowledge - only use provided references."""
+        
+        max_tokens = config["MAX_RESPONSE_TOKENS"]
+    else:
+        system_prompt = """You are a spiritual counselor providing brief, focused guidance based on Bhagavad Gita teachings and modern psychometrics. Using only the provided references, give concise but meaningful advice.
 
-1. Tone & Purpose
-Keep your tone professional, clear, and informative.
-Reports should be understandable to non-experts but grounded in policy.
+Keep responses short and to the point while maintaining warmth and spiritual wisdom. Focus on the most essential guidance only."""
+        
+        max_tokens = min(config["MAX_RESPONSE_TOKENS"] // 2, 2000)  # Shorter for brief answers
 
-2. Structure
-Use clear sections with bold titles, such as:
-Summary: What the document is and what you're evaluating.
-Compliance Review: List applicable rules (e.g., Rule 136, GFR 2017) and check adherence.
-Observations: Note missing data, errors, or issues.
-Conclusion/Recommendation: State whether the proposal is acceptable, needs correction, or is non-compliant.
-
-3. Citations
-When referencing policies:
-Mention exact rule names and numbers.
-Use parentheses or brackets for citations: e.g., (Rule 47, GFR 2017), [Audit Manual, Sec. 3.2].
-
-4. Clarity & Formatting
-Use bullet points where needed.
-Avoid long paragraphs.
-Be concise but complete.
-
-5. Restrictions
-Do not hallucinate information or rules.
-Do not say "as per guidelines" without specifying the document.
-Do not copy large sections of text—summarize instead.
-
+    prompt = f"""
 Reference Documents:
 {context_block}
-"""
-        + (f"\nProposal document:\n{proposal_block}\n" if use_proposal else "")
-        + f"""
+
 User Question:
 {user_query}
 
-If the answer is not found in the provided context, respond: "The answer is not present in the provided references." Otherwise, answer fully, using a friendly, complete, professional and helpful style.
+If the answer is not found in the provided context, respond: "The answer is not present in the provided references." Otherwise, provide {'comprehensive' if is_detailed else 'brief'} guidance using a warm, empathetic, and spiritually grounded approach.
 """
-    )
 
     try:
         input_tokens = count_tokens(prompt, model_name)
 
-        if input_tokens > (config["TOKEN_BUDGET"] - config["MAX_RESPONSE_TOKENS"]):
+        if input_tokens > (config["TOKEN_BUDGET"] - max_tokens):
             # Attempt truncation
             orig_chunks = context_block.split("\n\n")
             while (
-                input_tokens > (config["TOKEN_BUDGET"] - config["MAX_RESPONSE_TOKENS"])
+                input_tokens > (config["TOKEN_BUDGET"] - max_tokens)
                 and len(orig_chunks) > 1
             ):
                 orig_chunks = orig_chunks[:-1]
@@ -540,7 +449,7 @@ If the answer is not found in the provided context, respond: "The answer is not 
                 context_block = context_block_new
                 input_tokens = count_tokens(prompt, model_name)
 
-            if input_tokens > (config["TOKEN_BUDGET"] - config["MAX_RESPONSE_TOKENS"]):
+            if input_tokens > (config["TOKEN_BUDGET"] - max_tokens):
                 st.warning("Prompt too long. Try selecting fewer reference documents.")
                 return "Error: Token limit exceeded."
 
@@ -548,13 +457,10 @@ If the answer is not found in the provided context, respond: "The answer is not 
             client.chat.completions.create,
             model=model_name,
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert auditor and policy assistant. Your job is to help the user by providing high-quality, easy to understand, fully structured answers using ONLY the context supplied.",
-                },
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=config["MAX_RESPONSE_TOKENS"],
+            max_tokens=max_tokens,
         )
 
         if not response or not hasattr(response, "choices"):
@@ -570,7 +476,7 @@ If the answer is not found in the provided context, respond: "The answer is not 
 def make_summary(full_answer, model_name, config):
     """Generate summary of the full answer"""
     summary_prompt = f"""
-Summarize the following answer in 2-4 lines for a 'Summary (TL;DR)' box at the end of a report. Focus on only the essential points and avoid repetition. Write in clear plain English.
+Summarize the following spiritual counseling answer in 2-4 lines for a 'Summary (TL;DR)' box. Focus on the essential spiritual guidance and practical steps. Write in clear, compassionate language.
 
 Answer:
 {full_answer}
@@ -584,7 +490,7 @@ TL;DR:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant who summarizes text for users in short, plain language for non-experts.",
+                    "content": "You are a helpful assistant who summarizes spiritual guidance in short, compassionate language.",
                 },
                 {"role": "user", "content": summary_prompt},
             ],
@@ -608,7 +514,7 @@ def main():
     )
     PASSWORD = os.getenv("PASSWORD")
 
-    # Ask for password if not authenticated yet
+    # Authentication
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
@@ -616,9 +522,7 @@ def main():
         st.title("🔐 Authentication Required")
 
         with st.form("login_form"):
-            pwd = st.text_input(
-                "Enter password:", type="password", placeholder="Enter your password"
-            )
+            pwd = st.text_input("Enter password:", type="password", placeholder="Enter your password")
             submit_button = st.form_submit_button("Login")
 
         if submit_button:
@@ -679,9 +583,7 @@ def main():
         subfolder_names = [f["name"] for f in subfolders]
         subfolder_map = {f["name"]: f["id"] for f in subfolders}
 
-        selected_subfolders = st.multiselect(
-            "Choose one or more subfolders", subfolder_names
-        )
+        selected_subfolders = st.multiselect("Choose one or more subfolders", subfolder_names)
     except Exception as e:
         st.error(f"Listing subfolders failed: {str(e)}")
         st.stop()
@@ -706,11 +608,7 @@ def main():
                     st.session_state.reference_docs = docs
 
                     # Reset RAG cache
-                    for k in [
-                        "rag_chunks",
-                        "rag_chunks_embeddings",
-                        "rag_ref_docs_hash",
-                    ]:
+                    for k in ["rag_chunks", "rag_chunks_embeddings", "rag_ref_docs_hash"]:
                         if k in st.session_state:
                             del st.session_state[k]
 
@@ -728,317 +626,147 @@ def main():
     else:
         st.info("No reference documents loaded.")
 
-    # Model selection (moved up)
+    # Model selection
     st.subheader("Select Model")
-    try:
-        model_cols = st.columns(len(MODEL_MAP))
-        for i, (label, model) in enumerate(MODEL_MAP.items()):
-            if model_cols[i].button(label):
-                st.session_state.selected_model = model
-                st.session_state.selected_model_label = label
-    except Exception:
-        st.session_state.selected_model = "gpt-4.1"
-        st.session_state.selected_model_label = (
-            "Gamma - Large input capacity, detailed tasks"
-        )
+    model_cols = st.columns(len(MODEL_MAP))
+    for i, (label, model) in enumerate(MODEL_MAP.items()):
+        if model_cols[i].button(label):
+            st.session_state.selected_model = model
+            st.session_state.selected_model_label = label
 
     # Initialize model selection if not exists
     if "selected_model" not in st.session_state:
         st.session_state.selected_model = "gpt-4.1"
-    if "selected_model_label" not in st.session_state:
-        st.session_state.selected_model_label = (
-            "Gamma - Large input capacity, detailed tasks"
-        )
+        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
 
     st.success(f"Model selected: {st.session_state.selected_model_label}")
     selected_model = st.session_state.selected_model
-
-    # Get model configuration
     config = MODEL_CONFIGS.get(selected_model, MODEL_CONFIGS["gpt-4.1"])
 
     # Mode selection
     st.subheader("Select Mode")
     mode = st.radio(
         "Choose mode",
-        ["Report/Template Generation", "Query Answering"],
+        ["Report Generation (Detailed)", "Query Answering (Brief)"],
         horizontal=True,
     )
 
-    # Report/Template Generation Mode
-    if mode == "Report/Template Generation":
-        st.subheader("Report/Template Query")
+    # Common input fields
+    st.subheader("Your Information")
+    
+    if "personality_score" not in st.session_state:
+        st.session_state.personality_score = 0
+    if "vedic_personality_score" not in st.session_state:
+        st.session_state.vedic_personality_score = 0
 
-        # Inputs for report generation (same as counselling)
-        if "report_question" not in st.session_state:
-            st.session_state.report_question = ""
-        if "personality_score" not in st.session_state:
-            st.session_state.personality_score = 0
-        if "vedic_personality_score" not in st.session_state:
-            st.session_state.vedic_personality_score = 0
-
-        report_question = st.text_input(
-            "Ask your Question for Counselling",
-            value=st.session_state.get("report_question", ""),
-            key="report_question_input_1",
-        )
-        if report_question != st.session_state.get("report_question", ""):
-            st.session_state.report_question = report_question
-
+    col1, col2 = st.columns(2)
+    with col1:
         personality_score = st.number_input(
             "Your Personality Score",
             min_value=0,
             max_value=100,
             value=st.session_state.get("personality_score", 0),
             step=1,
-            key="personality_score_input_1",
         )
         st.session_state.personality_score = personality_score
 
+    with col2:
         vedic_personality_score = st.number_input(
             "Vedic Personality Score",
             min_value=0,
             max_value=100,
             value=st.session_state.get("vedic_personality_score", 0),
             step=1,
-            key="vedic_personality_score_input_1",
         )
         st.session_state.vedic_personality_score = vedic_personality_score
 
-        # Quick prompts at the end
-        st.subheader("Quick Prompts")
-        if "quick_prompt" not in st.session_state:
-            st.session_state.quick_prompt = None
+    # Quick prompts
+    st.subheader("Quick Prompts")
+    quick_col1, quick_col2, quick_col3 = st.columns(3)
+    
+    selected_preset = None
+    with quick_col1:
+        if st.button("Ask Bhagvad Gita"):
+            selected_preset = PRESET_QUERIES["Ask Bhagvad Gita"]
+    with quick_col2:
+        if st.button("Personalized Therapy Recommendation"):
+            selected_preset = PRESET_QUERIES["Personalized Therapy Recommendation"]
+    with quick_col3:
+        if st.button("Ancient Self"):
+            selected_preset = PRESET_QUERIES["Ancient Self"]
 
-        quick_col1, quick_col2, quick_col3 = st.columns(3)
-        try:
-            with quick_col1:
-                if st.button("Ask Bhagvad Gita"):
-                    st.session_state.quick_prompt = PRESET_QUERIES["Ask Bhagvad Gita"]
-            with quick_col2:
-                if st.button("Personalized Therapy Recommendation"):
-                    st.session_state.quick_prompt = PRESET_QUERIES[
-                        "Personalized Therapy Recommendation"
-                    ]
-            with quick_col3:
-                if st.button("Ancient Self"):
-                    st.session_state.quick_prompt = PRESET_QUERIES["Ancient Self"]
-        except Exception:
-            pass
+    # Question input
+    st.subheader("Ask Your Question for Counselling")
+    
+    if selected_preset:
+        user_question = selected_preset
+        st.info(f"Using preset: {user_question}")
+    else:
+        user_question = st.text_area(
+            "Enter your question:",
+            height=100,
+            placeholder="Ask your question for spiritual guidance..."
+        )
 
-        # submit_custom_query = st.button("Submit")  # COMMENTED OUT
-        submit_custom_query = False  # Always False since button is commented
+    # Submit button
+    is_detailed = "Detailed" in mode
+    submit_label = "Generate Detailed Report" if is_detailed else "Get Brief Answer"
+    
+    if st.button(submit_label) and user_question:
+        if reference_docs:
+            # Build extra info from personality scores
+            extra_info = ""
+            if personality_score:
+                extra_info += f"\nPersonality Score: {personality_score}"
+            if vedic_personality_score:
+                extra_info += f"\nVedic Personality Score: {vedic_personality_score}"
 
-        # Handle query submission
-        used_query = report_question
-        if st.session_state.get("quick_prompt"):
-            used_query = st.session_state.quick_prompt
-
-        # Only run if a quick prompt is selected (since submit is commented)
-        if st.session_state.get("quick_prompt") and used_query:
-            if reference_docs:
-                # All three fields are optional, so build extra_info accordingly
-                extra_info = ""
-                if personality_score:
-                    extra_info += f"\nPersonality Score: {personality_score}"
-                if vedic_personality_score:
-                    extra_info += (
-                        f"\nVedic Personality Score: {vedic_personality_score}"
-                    )
-
-                with st.spinner("Fetching relevant context and generating report..."):
-                    try:
-                        context_block = assemble_context(
-                            reference_docs,
-                            (used_query or "") + extra_info,
-                            config["CONTEXT_CHUNKS"],
-                            config["CHUNK_CHAR_LIMIT"],
-                        )
-                        output = run_model(
-                            context_block,
-                            None,
-                            (used_query or "") + extra_info,
-                            selected_model,
-                            config,
-                        )
-                        summary = make_summary(output, selected_model, config)
-                    except Exception as e:
-                        st.error(f"Report generation error: {str(e)}")
-                        output = "Error generating report"
-                        summary = "Error"
-
-                # Display results
-                st.subheader("Result")
+            with st.spinner(f"{'Generating detailed report' if is_detailed else 'Getting brief answer'}..."):
                 try:
-                    st.write(output)
-                    st.markdown(
-                        f"---\n<b>Summary (TL;DR):</b><br>{summary}",
-                        unsafe_allow_html=True,
+                    context_block = assemble_context(
+                        reference_docs,
+                        user_question + extra_info,
+                        config["CONTEXT_CHUNKS"],
+                        config["CHUNK_CHAR_LIMIT"],
                     )
-
-                    # Download button
-                    download_content = output + "\n\nSummary (TL;DR):\n" + summary
-                    st.download_button(
-                        "Download response as TXT",
-                        download_content,
-                        file_name="audit_response.txt",
-                        mime="text/plain",
+                    output = run_model(
+                        context_block,
+                        user_question + extra_info,
+                        selected_model,
+                        config,
+                        is_detailed=is_detailed
                     )
+                    
+                    if is_detailed:
+                        summary = make_summary(output, selected_model, config)
+                    else:
+                        summary = None
+                        
                 except Exception as e:
-                    st.error(f"Error displaying results: {str(e)}")
+                    st.error(f"Error generating response: {str(e)}")
+                    output = "Error generating response"
+                    summary = "Error"
 
-                # Reset quick prompt
-                st.session_state.quick_prompt = None
-            else:
-                st.info("Please select and load reference documents from Google Drive.")
+            # Display results
+            st.subheader("Result")
+            st.write(output)
+            
+            if summary:
+                st.markdown(f"---\n<b>Summary (TL;DR):</b><br>{summary}", unsafe_allow_html=True)
 
-    # Model selection
-    st.subheader("Select Model")
-    try:
-        model_cols = st.columns(len(MODEL_MAP))
-        for i, (label, model) in enumerate(MODEL_MAP.items()):
-            if model_cols[i].button(label):
-                st.session_state.selected_model = model
-                st.session_state.selected_model_label = label
-    except Exception:
-        st.session_state.selected_model = "gpt-4.1"
-        st.session_state.selected_model_label = (
-            "Gamma - Large input capacity, detailed tasks"
-        )
-
-    # Initialize model selection if not exists
-    if "selected_model" not in st.session_state:
-        st.session_state.selected_model = "gpt-4.1"
-    if "selected_model_label" not in st.session_state:
-        st.session_state.selected_model_label = (
-            "Gamma - Large input capacity, detailed tasks"
-        )
-
-    st.success(f"Model selected: {st.session_state.selected_model_label}")
-    selected_model = st.session_state.selected_model
-
-    # Get model configuration
-    config = MODEL_CONFIGS.get(selected_model, MODEL_CONFIGS["gpt-4.1"])
-
-    # Query Answering Mode
-    if mode == "Query Answering":
-        st.subheader("Ask your Question for Counselling")
-
-        # Quick prompts for Query Answering mode
-        if "qa_quick_prompt" not in st.session_state:
-            st.session_state.qa_quick_prompt = None
-
-        qa_quick_col1, qa_quick_col2, qa_quick_col3 = st.columns(3)
-        try:
-            with qa_quick_col1:
-                if st.button("Ask Bhagvad Gita", key="qa_gita"):
-                    st.session_state.qa_quick_prompt = PRESET_QUERIES[
-                        "Ask Bhagvad Gita"
-                    ]
-            with qa_quick_col2:
-                if st.button("Personalized Therapy Recommendation", key="qa_therapy"):
-                    st.session_state.qa_quick_prompt = PRESET_QUERIES[
-                        "Personalized Therapy Recommendation"
-                    ]
-            with qa_quick_col3:
-                if st.button("Ancient Self", key="qa_ancient"):
-                    st.session_state.qa_quick_prompt = PRESET_QUERIES["Ancient Self"]
-        except Exception:
-            pass
-
-        # Inputs for counselling
-        if "counselling_question" not in st.session_state:
-            st.session_state.counselling_question = ""
-        if "personality_score" not in st.session_state:
-            st.session_state.personality_score = 0
-        if "vedic_personality_score" not in st.session_state:
-            st.session_state.vedic_personality_score = 0
-
-        # If a quick prompt is selected, use it as the question
-        if st.session_state.get("qa_quick_prompt"):
-            counselling_question = st.session_state.qa_quick_prompt
-        else:
-            counselling_question = st.text_input(
-                "Ask your Question for Counselling",
-                value=st.session_state.get("counselling_question", ""),
-                key="counselling_question_input_1",
+            # Download button
+            download_content = output
+            if summary:
+                download_content += f"\n\nSummary (TL;DR):\n{summary}"
+                
+            st.download_button(
+                "Download response as TXT",
+                download_content,
+                file_name=f"counselling_{'report' if is_detailed else 'answer'}.txt",
+                mime="text/plain",
             )
-            if counselling_question != st.session_state.get("counselling_question", ""):
-                st.session_state.counselling_question = counselling_question
-
-        personality_score = st.number_input(
-            "Your Personality Score",
-            min_value=0,
-            max_value=100,
-            value=st.session_state.get("personality_score", 0),
-            step=1,
-            key="personality_score_input_3",
-        )
-        st.session_state.personality_score = personality_score
-
-        vedic_personality_score = st.number_input(
-            "Vedic Personality Score",
-            min_value=0,
-            max_value=100,
-            value=st.session_state.get("vedic_personality_score", 0),
-            step=1,
-            key="vedic_personality_score_input_3",
-        )
-        st.session_state.vedic_personality_score = vedic_personality_score
-
-        submit_counselling = st.button("Get Counselling Answer")
-
-        # Use the quick prompt if set, otherwise use the text area value
-        used_counselling_question = (
-            st.session_state.get("qa_quick_prompt") or counselling_question
-        )
-
-        if submit_counselling and used_counselling_question:
-            if reference_docs:
-                with st.spinner("Searching references and answering..."):
-                    try:
-                        extra_info = f"\nPersonality Score: {personality_score}\nVedic Personality Score: {vedic_personality_score}"
-                        context_block = assemble_context(
-                            reference_docs,
-                            used_counselling_question + extra_info,
-                            config["CONTEXT_CHUNKS"],
-                            config["CHUNK_CHAR_LIMIT"],
-                        )
-                        output = run_model(
-                            context_block,
-                            None,
-                            used_counselling_question + extra_info,
-                            selected_model,
-                            config,
-                        )
-                        summary = make_summary(output, selected_model, config)
-                    except Exception as e:
-                        st.error(f"QA error: {str(e)}")
-                        output = "Error generating answer"
-                        summary = "Error"
-
-                # Display results
-                st.subheader("Answer")
-                try:
-                    st.write(output)
-                    st.markdown(
-                        f"---\n<b>Summary (TL;DR):</b><br>{summary}",
-                        unsafe_allow_html=True,
-                    )
-
-                    # Download button
-                    download_content = output + "\n\nSummary (TL;DR):\n" + summary
-                    st.download_button(
-                        "Download answer as TXT",
-                        download_content,
-                        file_name="counselling_answer.txt",
-                        mime="text/plain",
-                    )
-                except Exception as e:
-                    st.error(f"Error displaying answer: {str(e)}")
-                # Reset quick prompt after use
-                st.session_state.qa_quick_prompt = None
-            else:
-                st.info("Please select and load reference documents from Google Drive.")
+        else:
+            st.info("Please select and load reference documents from Google Drive first.")
 
 
 if __name__ == "__main__":
