@@ -651,68 +651,82 @@ def main():
         horizontal=True,
     )
 
+
     # Common input fields
-    st.subheader("Your Information")
-    
+
+    # Counselling question (styled like number_input for consistency, but using text_input for single-line or text_area for multi-line)
+    if "user_question" not in st.session_state:
+        st.session_state.user_question = ""
+    user_question = st.text_input(
+        "Counselling Question",
+        value=st.session_state.get("user_question", ""),
+        placeholder="Ask your question for spiritual guidance..."
+    )
+    st.session_state.user_question = user_question
+
+    # Personality and Vedic score fields (below counselling)
     if "personality_score" not in st.session_state:
         st.session_state.personality_score = 0
     if "vedic_personality_score" not in st.session_state:
         st.session_state.vedic_personality_score = 0
 
-    col1, col2 = st.columns(2)
-    with col1:
-        personality_score = st.number_input(
-            "Your Personality Score",
-            min_value=0,
-            max_value=100,
-            value=st.session_state.get("personality_score", 0),
-            step=1,
-        )
-        st.session_state.personality_score = personality_score
+    personality_score = st.number_input(
+        "Your Personality Score",
+        min_value=0,
+        max_value=100,
+        value=st.session_state.get("personality_score", 0),
+        step=1,
+    )
+    st.session_state.personality_score = personality_score
 
-    with col2:
-        vedic_personality_score = st.number_input(
-            "Vedic Personality Score",
-            min_value=0,
-            max_value=100,
-            value=st.session_state.get("vedic_personality_score", 0),
-            step=1,
-        )
-        st.session_state.vedic_personality_score = vedic_personality_score
+    vedic_personality_score = st.text_input(
+        "Vedic Personality Score",
+        value=st.session_state.get("vedic_personality_score", ""),
+        placeholder="Enter your vedic personality score..."
+    )
+    st.session_state.vedic_personality_score = vedic_personality_score
 
-    # Quick prompts
+
+    # Quick prompts (now last)
     st.subheader("Quick Prompts")
-    quick_col1, quick_col2, quick_col3 = st.columns(3)
-    
-    selected_preset = None
-    with quick_col1:
-        if st.button("Ask Bhagvad Gita"):
-            selected_preset = PRESET_QUERIES["Ask Bhagvad Gita"]
-    with quick_col2:
-        if st.button("Personalized Therapy Recommendation"):
-            selected_preset = PRESET_QUERIES["Personalized Therapy Recommendation"]
-    with quick_col3:
-        if st.button("Ancient Self"):
-            selected_preset = PRESET_QUERIES["Ancient Self"]
+    if "selected_quick_prompt" not in st.session_state:
+        st.session_state.selected_quick_prompt = None
 
-    # Question input
-    st.subheader("Ask Your Question for Counselling")
-    
-    if selected_preset:
-        user_question = selected_preset
-        st.info(f"Using preset: {user_question}")
-    else:
-        user_question = st.text_area(
-            "Enter your question:",
-            height=100,
-            placeholder="Ask your question for spiritual guidance..."
-        )
+    quick_prompt_labels = list(PRESET_QUERIES.keys())
+    quick_prompt_backend = PRESET_QUERIES
+    quick_cols = st.columns(3)
+    for i, label in enumerate(quick_prompt_labels):
+        btn_style = "background-color:#4CAF50;color:white;" if st.session_state.selected_quick_prompt == label else ""
+        with quick_cols[i]:
+            if st.button(label, key=f"quick_{label}", help=None):
+                st.session_state.selected_quick_prompt = label
+    # Add custom CSS for selected button
+    st.markdown("""
+        <style>
+        div[data-testid="column"] button[style*='background-color:#4CAF50'] {
+            border: 2px solid #388e3c !important;
+            font-weight: bold !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Show confirmation message for selected quick prompt
+    if st.session_state.selected_quick_prompt:
+        selected_label = st.session_state.selected_quick_prompt
+        selected_query = quick_prompt_backend[selected_label]
+        st.success(f"Quick prompt selected: {selected_label}")
+        st.info(f"Query: {selected_query}")
 
     # Submit button
     is_detailed = "Detailed" in mode
     submit_label = "Generate Detailed Report" if is_detailed else "Get Brief Answer"
     
-    if st.button(submit_label) and user_question:
+    # Determine which query to use: quick prompt or user input
+    query_to_use = user_question
+    if st.session_state.selected_quick_prompt:
+        query_to_use = quick_prompt_backend[st.session_state.selected_quick_prompt]
+
+    if st.button(submit_label) and query_to_use:
         if reference_docs:
             # Build extra info from personality scores
             extra_info = ""
@@ -725,13 +739,13 @@ def main():
                 try:
                     context_block = assemble_context(
                         reference_docs,
-                        user_question + extra_info,
+                        query_to_use + extra_info,
                         config["CONTEXT_CHUNKS"],
                         config["CHUNK_CHAR_LIMIT"],
                     )
                     output = run_model(
                         context_block,
-                        user_question + extra_info,
+                        query_to_use + extra_info,
                         selected_model,
                         config,
                         is_detailed=is_detailed
