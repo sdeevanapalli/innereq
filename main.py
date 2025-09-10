@@ -816,7 +816,7 @@ def main():
             counselling_question = st.session_state.qa_quick_prompt
         else:
             counselling_question = st.text_area(
-                "Ask your Question for Counselling (Here user may type his questions)",
+                "Ask your Question for Counselling",
                 value=st.session_state.get("counselling_question", ""),
                 height=80
             )
@@ -824,13 +824,13 @@ def main():
                 st.session_state.counselling_question = counselling_question
 
         personality_score = st.number_input(
-            "Your Personality Score (Here user will enter his personality score)",
+            "Your Personality Score",
             min_value=0, max_value=100, value=st.session_state.get("personality_score", 0), step=1
         )
         st.session_state.personality_score = personality_score
 
         vedic_personality_score = st.number_input(
-            "Vedic Personality Score (Here user will enter his score)",
+            "Vedic Personality Score",
             min_value=0, max_value=100, value=st.session_state.get("vedic_personality_score", 0), step=1
         )
         st.session_state.vedic_personality_score = vedic_personality_score
