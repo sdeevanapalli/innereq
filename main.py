@@ -712,7 +712,6 @@ def main():
             selected_label = st.session_state.selected_quick_prompt
             selected_query = quick_prompt_backend[selected_label]
             st.success(f"Quick prompt selected: {selected_label}")
-            st.info(f"Query: {selected_query}")
 
         # Automatically trigger report generation when a quick prompt is selected
         if st.session_state.get("trigger_generate_report", False) and st.session_state.selected_quick_prompt:
