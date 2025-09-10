@@ -657,6 +657,30 @@ def main():
     else:
         st.info("No reference documents loaded.")
 
+    # Model selection (moved up)
+    st.subheader("Select Model")
+    try:
+        model_cols = st.columns(len(MODEL_MAP))
+        for i, (label, model) in enumerate(MODEL_MAP.items()):
+            if model_cols[i].button(label):
+                st.session_state.selected_model = model
+                st.session_state.selected_model_label = label
+    except Exception:
+        st.session_state.selected_model = "gpt-4.1"
+        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
+
+    # Initialize model selection if not exists
+    if "selected_model" not in st.session_state:
+        st.session_state.selected_model = "gpt-4.1"
+    if "selected_model_label" not in st.session_state:
+        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
+
+    st.success(f"Model selected: {st.session_state.selected_model_label}")
+    selected_model = st.session_state.selected_model
+
+    # Get model configuration
+    config = MODEL_CONFIGS.get(selected_model, MODEL_CONFIGS["gpt-4.1"])
+
     # Mode selection
     st.subheader("Select Mode")
     mode = st.radio(
@@ -664,7 +688,6 @@ def main():
         ["Report/Template Generation", "Query Answering"],
         horizontal=True
     )
-
 
     # Report/Template Generation Mode
     if mode == "Report/Template Generation":
