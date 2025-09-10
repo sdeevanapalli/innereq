@@ -665,8 +665,42 @@ def main():
         horizontal=True
     )
 
-    # Quick prompts for report modeƒ
+
+    # Report/Template Generation Mode
     if mode == "Report/Template Generation":
+        st.subheader("Report/Template Query")
+
+        # Inputs for report generation (same as counselling)
+        if "report_question" not in st.session_state:
+            st.session_state.report_question = ""
+        if "personality_score" not in st.session_state:
+            st.session_state.personality_score = 0
+        if "vedic_personality_score" not in st.session_state:
+            st.session_state.vedic_personality_score = 0
+
+        report_question = st.text_input(
+            "Ask your Question for Counselling",
+            value=st.session_state.get("report_question", ""),
+            key="report_question_input_1"
+        )
+        if report_question != st.session_state.get("report_question", ""):
+            st.session_state.report_question = report_question
+
+        personality_score = st.number_input(
+            "Your Personality Score",
+            min_value=0, max_value=100, value=st.session_state.get("personality_score", 0), step=1,
+            key="personality_score_input_1"
+        )
+        st.session_state.personality_score = personality_score
+
+        vedic_personality_score = st.number_input(
+            "Vedic Personality Score",
+            min_value=0, max_value=100, value=st.session_state.get("vedic_personality_score", 0), step=1,
+            key="vedic_personality_score_input_1"
+        )
+        st.session_state.vedic_personality_score = vedic_personality_score
+
+        # Quick prompts at the end
         st.subheader("Quick Prompts")
         if "quick_prompt" not in st.session_state:
             st.session_state.quick_prompt = None
@@ -685,88 +719,33 @@ def main():
         except Exception:
             pass
 
-    # Model selection
-    st.subheader("Select Model")
-    try:
-        model_cols = st.columns(len(MODEL_MAP))
-        for i, (label, model) in enumerate(MODEL_MAP.items()):
-            if model_cols[i].button(label):
-                st.session_state.selected_model = model
-                st.session_state.selected_model_label = label
-    except Exception:
-        st.session_state.selected_model = "gpt-4.1"
-        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
-
-    # Initialize model selection if not exists
-    if "selected_model" not in st.session_state:
-        st.session_state.selected_model = "gpt-4.1"
-    if "selected_model_label" not in st.session_state:
-        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
-
-    st.success(f"Model selected: {st.session_state.selected_model_label}")
-    selected_model = st.session_state.selected_model
-
-    # Get model configuration
-    config = MODEL_CONFIGS.get(selected_model, MODEL_CONFIGS["gpt-4.1"])
-
-    # Report/Template Generation Mode
-    if mode == "Report/Template Generation":
-        st.subheader("Report/Template Query")
-
-        # Inputs for report generation (same as counselling)
-        if "report_question" not in st.session_state:
-            st.session_state.report_question = ""
-        if "personality_score" not in st.session_state:
-            st.session_state.personality_score = 0
-        if "vedic_personality_score" not in st.session_state:
-            st.session_state.vedic_personality_score = 0
-
-        report_question = st.text_input(
-            "Ask your Question for Counselling",
-            value=st.session_state.get("report_question", "")
-        )
-        if report_question != st.session_state.get("report_question", ""):
-            st.session_state.report_question = report_question
-
-        personality_score = st.number_input(
-            "Your Personality Score",
-            min_value=0, max_value=100, value=st.session_state.get("personality_score", 0), step=1
-        )
-        st.session_state.personality_score = personality_score
-
-        vedic_personality_score = st.number_input(
-            "Vedic Personality Score",
-            min_value=0, max_value=100, value=st.session_state.get("vedic_personality_score", 0), step=1
-        )
-        st.session_state.vedic_personality_score = vedic_personality_score
-
-        submit_custom_query = st.button("Submit")
+        #submit_custom_query = st.button("Submit")  # COMMENTED OUT
+        submit_custom_query = False  # Always False since button is commented
 
         # Handle query submission
         used_query = report_question
         if st.session_state.get("quick_prompt"):
             used_query = st.session_state.quick_prompt
 
-        if (submit_custom_query or st.session_state.get("quick_prompt")) and used_query:
+        # Only run if a quick prompt is selected (since submit is commented)
+        if st.session_state.get("quick_prompt") and used_query:
             if reference_docs:
-                # Limit proposal text size
-                if proposal_text and len(proposal_text) > config["PROPOSAL_CHAR_LIMIT"]:
-                    st.warning(
-                        f"Proposal is large ({len(proposal_text)} chars). "
-                        f"Only the first {config['PROPOSAL_CHAR_LIMIT']} characters will be used."
-                    )
-                    proposal_text = proposal_text[:config["PROPOSAL_CHAR_LIMIT"]]
+                # All three fields are optional, so build extra_info accordingly
+                extra_info = ""
+                if personality_score:
+                    extra_info += f"\nPersonality Score: {personality_score}"
+                if vedic_personality_score:
+                    extra_info += f"\nVedic Personality Score: {vedic_personality_score}"
 
                 with st.spinner("Fetching relevant context and generating report..."):
                     try:
-                        extra_info = f"\nPersonality Score: {personality_score}\nVedic Personality Score: {vedic_personality_score}"
                         context_block = assemble_context(
                             reference_docs,
-                            used_query + extra_info,
+                            (used_query or "") + extra_info,
                             config["CONTEXT_CHUNKS"],
                             config["CHUNK_CHAR_LIMIT"]
                         )
-                        output = run_model(context_block, proposal_text, used_query + extra_info, selected_model, config)
+                        output = run_model(context_block, None, (used_query or "") + extra_info, selected_model, config)
                         summary = make_summary(output, selected_model, config)
                     except Exception as e:
                         st.error(f"Report generation error: {str(e)}")
@@ -795,8 +774,32 @@ def main():
             else:
                 st.info("Please select and load reference documents from Google Drive.")
 
+    # Model selection
+    st.subheader("Select Model")
+    try:
+        model_cols = st.columns(len(MODEL_MAP))
+        for i, (label, model) in enumerate(MODEL_MAP.items()):
+            if model_cols[i].button(label):
+                st.session_state.selected_model = model
+                st.session_state.selected_model_label = label
+    except Exception:
+        st.session_state.selected_model = "gpt-4.1"
+        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
+
+    # Initialize model selection if not exists
+    if "selected_model" not in st.session_state:
+        st.session_state.selected_model = "gpt-4.1"
+    if "selected_model_label" not in st.session_state:
+        st.session_state.selected_model_label = "Gamma - Large input capacity, detailed tasks"
+
+    st.success(f"Model selected: {st.session_state.selected_model_label}")
+    selected_model = st.session_state.selected_model
+
+    # Get model configuration
+    config = MODEL_CONFIGS.get(selected_model, MODEL_CONFIGS["gpt-4.1"])
+
     # Query Answering Mode
-    elif mode == "Query Answering":
+    if mode == "Query Answering":
         st.subheader("Ask your Question for Counselling")
 
         # Quick prompts for Query Answering mode
@@ -831,20 +834,23 @@ def main():
         else:
             counselling_question = st.text_input(
                 "Ask your Question for Counselling",
-                value=st.session_state.get("counselling_question", "")
+                value=st.session_state.get("counselling_question", ""),
+                key="counselling_question_input_1"
             )
             if counselling_question != st.session_state.get("counselling_question", ""):
                 st.session_state.counselling_question = counselling_question
 
         personality_score = st.number_input(
             "Your Personality Score",
-            min_value=0, max_value=100, value=st.session_state.get("personality_score", 0), step=1
+            min_value=0, max_value=100, value=st.session_state.get("personality_score", 0), step=1,
+            key="personality_score_input_3"
         )
         st.session_state.personality_score = personality_score
 
         vedic_personality_score = st.number_input(
             "Vedic Personality Score",
-            min_value=0, max_value=100, value=st.session_state.get("vedic_personality_score", 0), step=1
+            min_value=0, max_value=100, value=st.session_state.get("vedic_personality_score", 0), step=1,
+            key="vedic_personality_score_input_3"
         )
         st.session_state.vedic_personality_score = vedic_personality_score
 
