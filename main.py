@@ -696,7 +696,7 @@ def main():
             with quick_cols[i]:
                 if st.button(label, key=f"quick_{label}", help=None):
                     st.session_state.selected_quick_prompt = label
-                    st.session_state.trigger_generate_report = True
+
         # Add custom CSS for selected button
         st.markdown("""
             <style>
@@ -713,10 +713,28 @@ def main():
             selected_query = quick_prompt_backend[selected_label]
             st.success(f"Quick prompt selected: {selected_label}")
 
-        # Automatically trigger report generation when a quick prompt is selected
-        if st.session_state.get("trigger_generate_report", False) and st.session_state.selected_quick_prompt:
-            query_to_use = quick_prompt_backend[st.session_state.selected_quick_prompt]
-            if reference_docs:
+        # Add a paragraph field and submit button for custom prompt
+        if "custom_report_prompt" not in st.session_state:
+            st.session_state.custom_report_prompt = ""
+        custom_report_prompt = st.text_area(
+            "Or type your own detailed prompt",
+            value=st.session_state.get("custom_report_prompt", ""),
+            placeholder="Type your custom prompt for detailed report..."
+        )
+        st.session_state.custom_report_prompt = custom_report_prompt
+
+        if st.button("Generate Detailed Report"):
+            # Use custom prompt if provided, else use quick prompt
+            if custom_report_prompt.strip():
+                query_to_use = custom_report_prompt.strip()
+            elif st.session_state.selected_quick_prompt:
+                query_to_use = quick_prompt_backend[st.session_state.selected_quick_prompt]
+            else:
+                query_to_use = ""
+
+            if not query_to_use:
+                st.warning("Please select a quick prompt or type a custom prompt.")
+            elif reference_docs:
                 extra_info = ""
                 if personality_score:
                     extra_info += f"\nPersonality Score: {personality_score}"
@@ -761,14 +779,12 @@ def main():
                 )
             else:
                 st.info("Please select and load reference documents from Google Drive first.")
-            # Reset trigger so it doesn't run again unless a new quick prompt is selected
-            st.session_state.trigger_generate_report = False
     else:
         # Brief mode: show a text field for the user's question
         submit_label = "Get Brief Answer"
         if "brief_user_question" not in st.session_state:
             st.session_state.brief_user_question = ""
-        brief_user_question = st.text_input(
+        brief_user_question = st.text_area(
             "Your Question",
             value=st.session_state.get("brief_user_question", ""),
             placeholder="Ask your question for spiritual guidance..."
