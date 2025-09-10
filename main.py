@@ -544,7 +544,7 @@ TL;DR:
 
 # STREAMLIT UI
 def main():
-    st.set_page_config(page_title="Internal Audit Officer", layout="wide")
+    st.set_page_config(page_title="Inner Equilibrium: Combining Bhagavad Gita Teachings with Modern Psychometrics", layout="wide")
     PASSWORD = os.getenv("PASSWORD")
 
     # Ask for password if not authenticated yet
