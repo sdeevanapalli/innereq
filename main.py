@@ -652,135 +652,164 @@ def main():
     )
 
 
-    # Common input fields
-
-    # Counselling question (styled like number_input for consistency, but using text_input for single-line or text_area for multi-line)
-    if "user_question" not in st.session_state:
-        st.session_state.user_question = ""
-    user_question = st.text_input(
-        "Counselling Question",
-        value=st.session_state.get("user_question", ""),
-        placeholder="Ask your question for spiritual guidance..."
-    )
-    st.session_state.user_question = user_question
-
-    # Personality and Vedic score fields (below counselling)
-    if "personality_score" not in st.session_state:
-        st.session_state.personality_score = 0
-    if "vedic_personality_score" not in st.session_state:
-        st.session_state.vedic_personality_score = 0
-
-    personality_score = st.number_input(
-        "Your Personality Score",
-        min_value=0,
-        max_value=100,
-        value=st.session_state.get("personality_score", 0),
-        step=1,
-    )
-    st.session_state.personality_score = personality_score
-
-    vedic_personality_score = st.text_input(
-        "Vedic Personality Score",
-        value=st.session_state.get("vedic_personality_score", ""),
-        placeholder="Enter your vedic personality score..."
-    )
-    st.session_state.vedic_personality_score = vedic_personality_score
-
-
-    # Quick prompts (now last)
-    st.subheader("Quick Prompts")
-    if "selected_quick_prompt" not in st.session_state:
-        st.session_state.selected_quick_prompt = None
-
-    quick_prompt_labels = list(PRESET_QUERIES.keys())
-    quick_prompt_backend = PRESET_QUERIES
-    quick_cols = st.columns(3)
-    for i, label in enumerate(quick_prompt_labels):
-        btn_style = "background-color:#4CAF50;color:white;" if st.session_state.selected_quick_prompt == label else ""
-        with quick_cols[i]:
-            if st.button(label, key=f"quick_{label}", help=None):
-                st.session_state.selected_quick_prompt = label
-    # Add custom CSS for selected button
-    st.markdown("""
-        <style>
-        div[data-testid="column"] button[style*='background-color:#4CAF50'] {
-            border: 2px solid #388e3c !important;
-            font-weight: bold !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # Show confirmation message for selected quick prompt
-    if st.session_state.selected_quick_prompt:
-        selected_label = st.session_state.selected_quick_prompt
-        selected_query = quick_prompt_backend[selected_label]
-        st.success(f"Quick prompt selected: {selected_label}")
-        st.info(f"Query: {selected_query}")
-
-    # Submit button
+    # Only show input fields and quick prompts for Report Generation (Detailed) mode
     is_detailed = "Detailed" in mode
-    submit_label = "Generate Detailed Report" if is_detailed else "Get Brief Answer"
-    
-    # Determine which query to use: quick prompt or user input
-    query_to_use = user_question
-    if st.session_state.selected_quick_prompt:
-        query_to_use = quick_prompt_backend[st.session_state.selected_quick_prompt]
+    if is_detailed:
+        # All three as text fields
+        if "user_question" not in st.session_state:
+            st.session_state.user_question = ""
+        user_question = st.text_input(
+            "Counselling Question",
+            value=st.session_state.get("user_question", ""),
+            placeholder="Ask your question for spiritual guidance..."
+        )
+        st.session_state.user_question = user_question
 
-    if st.button(submit_label) and query_to_use:
-        if reference_docs:
-            # Build extra info from personality scores
-            extra_info = ""
-            if personality_score:
-                extra_info += f"\nPersonality Score: {personality_score}"
-            if vedic_personality_score:
-                extra_info += f"\nVedic Personality Score: {vedic_personality_score}"
+        if "personality_score" not in st.session_state:
+            st.session_state.personality_score = ""
+        personality_score = st.text_input(
+            "Your Personality Score",
+            value=st.session_state.get("personality_score", ""),
+            placeholder="Enter your personality score..."
+        )
+        st.session_state.personality_score = personality_score
 
-            with st.spinner(f"{'Generating detailed report' if is_detailed else 'Getting brief answer'}..."):
-                try:
-                    context_block = assemble_context(
-                        reference_docs,
-                        query_to_use + extra_info,
-                        config["CONTEXT_CHUNKS"],
-                        config["CHUNK_CHAR_LIMIT"],
-                    )
-                    output = run_model(
-                        context_block,
-                        query_to_use + extra_info,
-                        selected_model,
-                        config,
-                        is_detailed=is_detailed
-                    )
-                    
-                    if is_detailed:
+        if "vedic_personality_score" not in st.session_state:
+            st.session_state.vedic_personality_score = ""
+        vedic_personality_score = st.text_input(
+            "Vedic Personality Score",
+            value=st.session_state.get("vedic_personality_score", ""),
+            placeholder="Enter your vedic personality score..."
+        )
+        st.session_state.vedic_personality_score = vedic_personality_score
+
+        # Quick prompts (only for detailed mode)
+        st.subheader("Quick Prompts")
+        if "selected_quick_prompt" not in st.session_state:
+            st.session_state.selected_quick_prompt = None
+
+        quick_prompt_labels = list(PRESET_QUERIES.keys())
+        quick_prompt_backend = PRESET_QUERIES
+        quick_cols = st.columns(3)
+        for i, label in enumerate(quick_prompt_labels):
+            btn_style = "background-color:#4CAF50;color:white;" if st.session_state.selected_quick_prompt == label else ""
+            with quick_cols[i]:
+                if st.button(label, key=f"quick_{label}", help=None):
+                    st.session_state.selected_quick_prompt = label
+                    st.session_state.trigger_generate_report = True
+        # Add custom CSS for selected button
+        st.markdown("""
+            <style>
+            div[data-testid="column"] button[style*='background-color:#4CAF50'] {
+                border: 2px solid #388e3c !important;
+                font-weight: bold !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Show confirmation message for selected quick prompt
+        if st.session_state.selected_quick_prompt:
+            selected_label = st.session_state.selected_quick_prompt
+            selected_query = quick_prompt_backend[selected_label]
+            st.success(f"Quick prompt selected: {selected_label}")
+            st.info(f"Query: {selected_query}")
+
+        # Automatically trigger report generation when a quick prompt is selected
+        if st.session_state.get("trigger_generate_report", False) and st.session_state.selected_quick_prompt:
+            query_to_use = quick_prompt_backend[st.session_state.selected_quick_prompt]
+            if reference_docs:
+                extra_info = ""
+                if personality_score:
+                    extra_info += f"\nPersonality Score: {personality_score}"
+                if vedic_personality_score:
+                    extra_info += f"\nVedic Personality Score: {vedic_personality_score}"
+                with st.spinner("Generating detailed report..."):
+                    try:
+                        context_block = assemble_context(
+                            reference_docs,
+                            query_to_use + extra_info,
+                            config["CONTEXT_CHUNKS"],
+                            config["CHUNK_CHAR_LIMIT"],
+                        )
+                        output = run_model(
+                            context_block,
+                            query_to_use + extra_info,
+                            selected_model,
+                            config,
+                            is_detailed=True
+                        )
                         summary = make_summary(output, selected_model, config)
-                    else:
+                    except Exception as e:
+                        st.error(f"Error generating response: {str(e)}")
+                        output = "Error generating response"
+                        summary = "Error"
+
+                # Display results
+                st.subheader("Result")
+                st.write(output)
+                if summary:
+                    st.markdown(f"---\n<b>Summary (TL;DR):</b><br>{summary}", unsafe_allow_html=True)
+
+                # Download button
+                download_content = output
+                if summary:
+                    download_content += f"\n\nSummary (TL;DR):\n{summary}"
+                st.download_button(
+                    "Download response as TXT",
+                    download_content,
+                    file_name="counselling_report.txt",
+                    mime="text/plain",
+                )
+            else:
+                st.info("Please select and load reference documents from Google Drive first.")
+            # Reset trigger so it doesn't run again unless a new quick prompt is selected
+            st.session_state.trigger_generate_report = False
+    else:
+        # Brief mode: no input fields, no quick prompts
+        submit_label = "Get Brief Answer"
+        query_to_use = None
+
+        if st.button(submit_label):
+            if reference_docs:
+                with st.spinner("Getting brief answer..."):
+                    try:
+                        context_block = assemble_context(
+                            reference_docs,
+                            "",  # No user input in brief mode
+                            config["CONTEXT_CHUNKS"],
+                            config["CHUNK_CHAR_LIMIT"],
+                        )
+                        output = run_model(
+                            context_block,
+                            "",
+                            selected_model,
+                            config,
+                            is_detailed=False
+                        )
                         summary = None
-                        
-                except Exception as e:
-                    st.error(f"Error generating response: {str(e)}")
-                    output = "Error generating response"
-                    summary = "Error"
+                    except Exception as e:
+                        st.error(f"Error generating response: {str(e)}")
+                        output = "Error generating response"
+                        summary = "Error"
 
-            # Display results
-            st.subheader("Result")
-            st.write(output)
-            
-            if summary:
-                st.markdown(f"---\n<b>Summary (TL;DR):</b><br>{summary}", unsafe_allow_html=True)
+                # Display results
+                st.subheader("Result")
+                st.write(output)
+                if summary:
+                    st.markdown(f"---\n<b>Summary (TL;DR):</b><br>{summary}", unsafe_allow_html=True)
 
-            # Download button
-            download_content = output
-            if summary:
-                download_content += f"\n\nSummary (TL;DR):\n{summary}"
-                
-            st.download_button(
-                "Download response as TXT",
-                download_content,
-                file_name=f"counselling_{'report' if is_detailed else 'answer'}.txt",
-                mime="text/plain",
-            )
-        else:
-            st.info("Please select and load reference documents from Google Drive first.")
+                # Download button
+                download_content = output
+                if summary:
+                    download_content += f"\n\nSummary (TL;DR):\n{summary}"
+                st.download_button(
+                    "Download response as TXT",
+                    download_content,
+                    file_name="counselling_answer.txt",
+                    mime="text/plain",
+                )
+            else:
+                st.info("Please select and load reference documents from Google Drive first.")
 
 
 if __name__ == "__main__":
