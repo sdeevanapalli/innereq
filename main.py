@@ -764,23 +764,30 @@ def main():
             # Reset trigger so it doesn't run again unless a new quick prompt is selected
             st.session_state.trigger_generate_report = False
     else:
-        # Brief mode: no input fields, no quick prompts
+        # Brief mode: show a text field for the user's question
         submit_label = "Get Brief Answer"
-        query_to_use = None
+        if "brief_user_question" not in st.session_state:
+            st.session_state.brief_user_question = ""
+        brief_user_question = st.text_input(
+            "Your Question",
+            value=st.session_state.get("brief_user_question", ""),
+            placeholder="Ask your question for spiritual guidance..."
+        )
+        st.session_state.brief_user_question = brief_user_question
 
-        if st.button(submit_label):
+        if st.button(submit_label) and brief_user_question.strip():
             if reference_docs:
                 with st.spinner("Getting brief answer..."):
                     try:
                         context_block = assemble_context(
                             reference_docs,
-                            "",  # No user input in brief mode
+                            brief_user_question,
                             config["CONTEXT_CHUNKS"],
                             config["CHUNK_CHAR_LIMIT"],
                         )
                         output = run_model(
                             context_block,
-                            "",
+                            brief_user_question,
                             selected_model,
                             config,
                             is_detailed=False
