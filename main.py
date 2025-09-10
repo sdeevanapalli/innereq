@@ -355,6 +355,7 @@ def retrieve_relevant_chunks(
         if not st.session_state.rag_chunks:
             return []
 
+
         query_emb = embedding_for_query(user_query)
         chunk_embs = st.session_state.rag_chunks_embeddings
 
