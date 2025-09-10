@@ -785,6 +785,24 @@ def main():
     elif mode == "Query Answering":
         st.subheader("Ask your Question for Counselling")
 
+        # Quick prompts for Query Answering mode
+        if "qa_quick_prompt" not in st.session_state:
+            st.session_state.qa_quick_prompt = None
+
+        qa_quick_col1, qa_quick_col2, qa_quick_col3 = st.columns(3)
+        try:
+            with qa_quick_col1:
+                if st.button("Ask Bhagvad Gita", key="qa_gita"):
+                    st.session_state.qa_quick_prompt = PRESET_QUERIES["Ask Bhagvad Gita"]
+            with qa_quick_col2:
+                if st.button("Personalized Therapy Recommendation", key="qa_therapy"):
+                    st.session_state.qa_quick_prompt = PRESET_QUERIES["Personalized Therapy Recommendation"]
+            with qa_quick_col3:
+                if st.button("Ancient Self", key="qa_ancient"):
+                    st.session_state.qa_quick_prompt = PRESET_QUERIES["Ancient Self"]
+        except Exception:
+            pass
+
         # Inputs for counselling
         if "counselling_question" not in st.session_state:
             st.session_state.counselling_question = ""
@@ -793,13 +811,17 @@ def main():
         if "vedic_personality_score" not in st.session_state:
             st.session_state.vedic_personality_score = 0
 
-        counselling_question = st.text_area(
-            "Ask your Question for Counselling (Here user may type his questions)",
-            value=st.session_state.get("counselling_question", ""),
-            height=80
-        )
-        if counselling_question != st.session_state.get("counselling_question", ""):
-            st.session_state.counselling_question = counselling_question
+        # If a quick prompt is selected, use it as the question
+        if st.session_state.get("qa_quick_prompt"):
+            counselling_question = st.session_state.qa_quick_prompt
+        else:
+            counselling_question = st.text_area(
+                "Ask your Question for Counselling (Here user may type his questions)",
+                value=st.session_state.get("counselling_question", ""),
+                height=80
+            )
+            if counselling_question != st.session_state.get("counselling_question", ""):
+                st.session_state.counselling_question = counselling_question
 
         personality_score = st.number_input(
             "Your Personality Score (Here user will enter his personality score)",
@@ -815,19 +837,21 @@ def main():
 
         submit_counselling = st.button("Get Counselling Answer")
 
-        if submit_counselling and counselling_question:
+        # Use the quick prompt if set, otherwise use the text area value
+        used_counselling_question = st.session_state.get("qa_quick_prompt") or counselling_question
+
+        if submit_counselling and used_counselling_question:
             if reference_docs:
                 with st.spinner("Searching references and answering..."):
                     try:
-                        # Optionally, you can use the scores in the context or prompt
                         extra_info = f"\nPersonality Score: {personality_score}\nVedic Personality Score: {vedic_personality_score}"
                         context_block = assemble_context(
                             reference_docs,
-                            counselling_question + extra_info,
+                            used_counselling_question + extra_info,
                             config["CONTEXT_CHUNKS"],
                             config["CHUNK_CHAR_LIMIT"]
                         )
-                        output = run_model(context_block, None, counselling_question + extra_info, selected_model, config)
+                        output = run_model(context_block, None, used_counselling_question + extra_info, selected_model, config)
                         summary = make_summary(output, selected_model, config)
                     except Exception as e:
                         st.error(f"QA error: {str(e)}")
@@ -850,6 +874,8 @@ def main():
                     )
                 except Exception as e:
                     st.error(f"Error displaying answer: {str(e)}")
+                # Reset quick prompt after use
+                st.session_state.qa_quick_prompt = None
             else:
                 st.info("Please select and load reference documents from Google Drive.")
 
